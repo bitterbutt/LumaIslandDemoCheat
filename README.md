@@ -4,8 +4,8 @@ BepInEx / Harmony plugin to remove the demo time limit and enable developer / ch
 
 ## Features
 
-- Removes the 5 day in-game time limit
-- Enables developer / cheat commands via the console
+- Removes the 5 day in-game time limit. [Preview](https://zipline.bitter.house/u/7825n9.gif)
+- Enables developer / cheat commands via the console. [Preview](https://zipline.bitter.house/u/19B7Ho.gif)
 
 ## Pre-requisites
 
@@ -31,6 +31,8 @@ BepInEx / Harmony plugin to remove the demo time limit and enable developer / ch
 Too many to list, use `help` and see for yourself
 
 ## Notes
+
+On Day 4 -> Day 5 you will still experience the camera shake "cutscene" but you won't be ejected from the demo. I haven't personally tested playing much further from here, so let me know if saving doesn't work.
 
 This is my first time creating a plugin for BepInEx / Harmony, so there may be bugs or issues.
 As this is for the demo, I imagine this will be obsolete once the full game is released.
