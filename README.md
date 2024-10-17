@@ -32,7 +32,10 @@ Too many to list, use `help` and see for yourself
 
 ## Notes
 
-On Day 4 -> Day 5 you will still experience the camera shake "cutscene" but you won't be ejected from the demo. I haven't personally tested playing much further from here, so let me know if saving doesn't work.
+On Day 4 -> Day 5 you will still experience the camera shake "cutscene" but you won't be ejected from the demo.
+The game does not save past Day 4. Still trying to patch out that logic. Use the `setday` command to revert the day.
+
+## Disclaimer
 
 This is my first time creating a plugin for BepInEx / Harmony, so there may be bugs or issues.
 As this is for the demo, I imagine this will be obsolete once the full game is released.
