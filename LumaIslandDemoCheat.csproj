@@ -35,6 +35,15 @@
     <Reference Include="UnityEngine.UI">
       <HintPath>lib\UnityEngine.UI.dll</HintPath>
     </Reference>
+    <Reference Include="MessagePack">
+      <HintPath>lib\MessagePack.dll</HintPath>
+    </Reference>
+    <Reference Include="MessagePack.Annotations">
+      <HintPath>lib\MessagePack.Annotations.dll</HintPath>
+    </Reference>
+    <Reference Include="mscorlib">
+      <HintPath>lib\mscorlib.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">

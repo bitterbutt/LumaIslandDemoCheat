@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection.Emit;
+using System.IO;
+using System.Reflection;
+using System.Threading;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
-using TMPro;
 using UnityEngine;
-using UnityEngine.Events;
-using UnityEngine.UI;
-using GameLogic;
+using MessagePack;
 
 namespace LumaIslandDemoCheat
 {
@@ -21,11 +21,9 @@ namespace LumaIslandDemoCheat
         private void Awake()
         {
             Logger = base.Logger;
-            Logger.LogInfo("Patching...");
             Setup();
             var harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
             harmony.PatchAll();
-            Logger.LogInfo("Patching complete...");
             Logger.LogWarning("Press ` to open the console after loading a save...");
             Logger.LogWarning("Enter 'EnableCheats' to enable the commands...");
             Logger.LogWarning("Enter 'help' to see the list of available commands...");
@@ -34,7 +32,6 @@ namespace LumaIslandDemoCheat
         private void Setup()
         {
             Harmony.CreateAndPatchAll(typeof(Hooks));
-            Logger.LogWarning("Debug.isDebugBuild == " + Debug.isDebugBuild.ToString());
         }
 
         public static void NoOpMethod()
@@ -55,8 +52,6 @@ namespace LumaIslandDemoCheat
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             var codes = new List<CodeInstruction>(instructions);
-            Plugin.Logger.LogInfo("Transpiler removing isDebugBuild check...");
-            Plugin.Logger.LogInfo("Transpiler removing isEditor check...");
             for (int i = 0; i < codes.Count; i++)
             {
                 if (codes[i].opcode == OpCodes.Call && codes[i].operand.ToString().Contains("get_isDebugBuild"))
@@ -81,17 +76,14 @@ namespace LumaIslandDemoCheat
         static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
             var codes = new List<CodeInstruction>(instructions);
-            Plugin.Logger.LogInfo("Transpiler for EndDemoTriggered is running...");
             for (int i = 0; i < codes.Count; i++)
             {
                 if (codes[i].opcode == OpCodes.Ldstr && (string)codes[i].operand == "EndDemoTriggered")
                 {
-                    Plugin.Logger.LogInfo("Removing 'EndDemoTriggered' check.");
                     for (int j = 0; j < 6; j++)
                     {
                         codes.RemoveAt(i);
                     }
-                    Plugin.Logger.LogWarning("'EndDemoTriggered' logic removed.");
                     break;
                 }
             }
@@ -99,55 +91,106 @@ namespace LumaIslandDemoCheat
         }
     }
 
-    [HarmonyPatch(typeof(GameState), "DoEndDayLogic")]
-    public static class DoEndDayLogicPatch
+    [HarmonyPatch(typeof(GameState))]
+    [HarmonyPatch("DoEndDayLogic")]
+    public static class GameStatePatch
     {
-        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        static bool Prefix(GameState __instance, int daysPassed)
         {
-            var codes = new List<CodeInstruction>(instructions);
-            Plugin.Logger.LogInfo("Transpiler for DoEndDayLogic is running...");
-            bool foundEarthquakeTrigger = false;
-            for (int i = 0; i < codes.Count; i++)
+            MethodInfo runCoreEndDayLogicMethod = typeof(GameState).GetMethod("RunCoreEndDayLogic", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (runCoreEndDayLogicMethod == null)
             {
-                if (codes[i].opcode == OpCodes.Callvirt || codes[i].opcode == OpCodes.Call)
+                Debug.LogError("RunCoreEndDayLogic method not found!");
+                return false;
+            }
+            FieldInfo onDayEndEvField = typeof(GameState).GetField("OnDayEndEv", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (onDayEndEvField != null)
+            {
+                Action onDayEndEv = (Action)onDayEndEvField.GetValue(__instance);
+                onDayEndEv?.Invoke();
+            }
+            bool flag = true;
+            foreach (LocalPlayerController localPlayerController in PlayersManager.Instance.LocalPlayers)
+            {
+                if (localPlayerController != null)
                 {
-                    // Plugin.Logger.LogInfo($"Found method call at index {i}: {codes[i].operand}");
-                    if (codes[i].operand != null && (codes[i].operand.ToString().Contains("TriggerAll") || codes[i].operand.ToString().Contains("FXTrigger")))
+                    var playerData = localPlayerController.Data;
+                    if (flag)
                     {
-                        Plugin.Logger.LogInfo("Found the FXTrigger method call. Replacing it with NoOpMethod.");
-                        codes[i].opcode = OpCodes.Call;
-                        codes[i].operand = AccessTools.Method(typeof(Plugin), nameof(Plugin.NoOpMethod));
-                        Plugin.Logger.LogWarning("Replaced FXTrigger method with NoOpMethod.");
-                        foundEarthquakeTrigger = true;
+                        flag = false;
+                        if (localPlayerController.Level != null && !localPlayerController.Level.IsDungeon())
+                        {
+                            playerData.Instance.GameUI.Fade.FadeOut(() =>
+                            {
+                                runCoreEndDayLogicMethod.Invoke(__instance, new object[] { playerData, daysPassed });
+                            });
+                        }
+                        else
+                        {
+                            runCoreEndDayLogicMethod.Invoke(__instance, new object[] { playerData, daysPassed });
+                        }
+                    }
+                    else if (localPlayerController.Level != null && !localPlayerController.Level.IsDungeon())
+                    {
+                        playerData.Instance.GameUI.Fade.FadeOut(null);
                     }
                 }
             }
-
-            if (!foundEarthquakeTrigger)
-            {
-                Plugin.Logger.LogError("Could not find the FXTrigger method to replace.");
-            }
-            return codes;
+            return false;
         }
     }
 
-    [HarmonyPatch(typeof(SaveGame), "HostSave")]
-    public static class SaveGame_HostSavePatch
+    [HarmonyPatch(typeof(SaveGame))]
+    [HarmonyPatch("HostSave")]
+    public static class SaveGamePatch
     {
-        static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        static bool Prefix(SaveGame __instance)
         {
-            var codes = new List<CodeInstruction>(instructions);
-            Plugin.Logger.LogInfo("Transpiler for HostSave is running...");
-            for (int i = 0; i < codes.Count; i++)
+            if (Network.Instance != null && !Network.IsHost)
             {
-                if (codes[i].opcode == OpCodes.Ldfld && codes[i + 1].opcode == OpCodes.Ldc_I4_4 && codes[i + 2].opcode == OpCodes.Bge)
-                {
-                    Plugin.Logger.LogInfo("Found 'DaysPassed >= 4' check. Removing it.");
-                    codes[i + 2].opcode = OpCodes.Nop;
-                    Plugin.Logger.LogWarning("DaysPassed >= 4 check removed.");
-                }
+                return false;
             }
-            return codes;
+            string text = SaveGame.GetFullPath(__instance.FileName, Environment.SpecialFolder.MyDocuments, "Saves");
+            string text2 = text + "_new";
+            string text3 = text + "_backup";
+            byte[] array = MessagePackSerializer.Serialize(__instance, SaveGame.GetSerializerOptions(), default(CancellationToken));
+            FileStream fileStream = File.Create(text2);
+            fileStream.Write(array);
+            fileStream.Close();
+            if (!File.Exists(text))
+            {
+                File.Move(text2, text);
+            }
+            else
+            {
+                File.Replace(text2, text, text3);
+            }
+            MethodInfo createOrUpdateHeaderMethod = typeof(SaveGame).GetMethod("CreateOrUpdateHeader", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (createOrUpdateHeaderMethod != null)
+            {
+                createOrUpdateHeaderMethod.Invoke(__instance, null);
+            }
+            else
+            {
+                Debug.LogError("Could not find CreateOrUpdateHeader method!");
+            }
+            text = SaveGame.GetFullPath(__instance.HeaderFileName, Environment.SpecialFolder.MyDocuments, "Saves");
+            text2 = text + "_new";
+            text3 = text + "_backup";
+            array = MessagePackSerializer.Serialize(__instance.Header, SaveGame.GetSerializerOptions(), default(CancellationToken));
+            FileStream fileStream2 = File.Create(text2);
+            fileStream2.Write(array);
+            fileStream2.Close();
+            if (!File.Exists(text))
+            {
+                File.Move(text2, text);
+            }
+            else
+            {
+                File.Replace(text2, text, text3);
+            }
+            Debug.Log("Saved game success");
+            return false;
         }
     }
 }
