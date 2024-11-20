@@ -1,3 +1,7 @@
+# Archival Notice - November 20th, 2024
+
+This repository will be archived as the game is now out in Early Access. Please go support the developers by purchasing the game from the [Steam store](https://store.steampowered.com/app/2408820/Luma_Island/)
+
 # LumaIslandDemoCheat
 
 BepInEx / Harmony plugin to remove the demo time limit and enable developer / cheat commands
